@@ -11,7 +11,7 @@ const parser = new XmlParser();
 const parseXmlString = promisify(parser.parseString);
 const responseToJson = resp => resp.text().then(resp => parseXmlString(resp));
 
-const BART_BASE_URL = 'http://api.bart.gov/api';
+const BART_BASE_URL = 'https://api.bart.gov/api';
 const BART_API_KEY = 'MW9S-E7SL-26DU-VV8V';
 const BART_SERVICE_END = moment('2:27 AM', 'hh:mm A');
 
@@ -116,7 +116,7 @@ class GoogleMap extends Component {
 }
 
 function fetchRoutes() {
-  return fetch(`http://api.bart.gov/api/route.aspx?cmd=routes&key=${ BART_API_KEY }`)
+  return fetch(`https://api.bart.gov/api/route.aspx?cmd=routes&key=${ BART_API_KEY }`)
     .then(responseToJson)
     .then(resp => resp.root.routes[0].route.map(
       route => ({
@@ -129,7 +129,7 @@ function fetchRoutes() {
 }
 
 function fetchRouteSchedule(routeNumber) {
-  return fetch(`http://api.bart.gov/api/sched.aspx?cmd=routesched&route=${ routeNumber }&key=MW9S-E7SL-26DU-VV8V`)
+  return fetch(`https://api.bart.gov/api/sched.aspx?cmd=routesched&route=${ routeNumber }&key=MW9S-E7SL-26DU-VV8V`)
     .then(responseToJson)
     .then(resp => ({
       trains: resp.root.route[0].train.map(train => ({
@@ -144,7 +144,7 @@ function fetchRouteSchedule(routeNumber) {
             const m = moment(timeString, 'hh:mm A');
 
             // account for barttime(tm)
-            // http://api.bart.gov/docs/overview/barttime.aspx
+            // https://api.bart.gov/docs/overview/barttime.aspx
             if (m.isBefore(BART_SERVICE_END)) {
               m.add(1, 'day');
             }
@@ -179,7 +179,7 @@ function fetchStations() {
 }
 
 function fetchRouteEtds() {
-  return fetch(`http://api.bart.gov/api/etd.aspx?cmd=etd&orig=all&key=MW9S-E7SL-26DU-VV8V`)
+  return fetch(`https://api.bart.gov/api/etd.aspx?cmd=etd&orig=all&key=MW9S-E7SL-26DU-VV8V`)
     .then(responseToJson)
     .then(resp => window.x = resp)
     .then(resp => 
