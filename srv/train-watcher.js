@@ -41,7 +41,7 @@ class Train {
   constructor(id, initialEtd) {
     assert(initialEtd, 'Train must be initialized with an estimate');
     this.id = id;
-    this.length = initialEtd.length;
+    this.cars = initialEtd.cars;
     this.updates = [];
 
     this.update(initialEtd);
