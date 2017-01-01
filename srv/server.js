@@ -228,14 +228,18 @@ class Train {
 
   update(etd) {
     const mostRecentUpdate = this.updates[this.updates.length - 1];
-    if (mostRecentUpdate && mostRecentUpdate.minutes === etd.minutes) {
+    const hasChange = !mostRecentUpdate || mostRecentUpdate.minutes !== etd.minutes;
+
+    if (!hasChange) {
       return;
     }
 
-    this.updates.push({
+    const update = {
       timestamp: moment(),
       minutes: etd.minutes,
-    });
+    };
+
+    this.updates.push(update);
 
     // debug(`updated train ${ this.id }:`, this.updates.map(update => `[${ update.timestamp.format('MM/DD@HH:mm:ss') }] ${ update.minutes }m`).join(', '));
   }
@@ -248,6 +252,9 @@ class Train {
 
       const diff = prev ? ` (diff: ${ update.timestamp.diff(prev.timestamp, 'seconds') }s)` : '';
       debug(`[${ update.timestamp.format('MM/DD@HH:mm:ss') }] ${ update.minutes }m${ diff }`);
+      if (prev && update.minutes > prev.minutes) {
+        debug('!!! train time increased ^^^')
+      }
     }
   }
 }
