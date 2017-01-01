@@ -285,7 +285,12 @@ async function main() {
   setInterval(async () => {
     const fetchedEtdMap = await analyze(stations, routes);
 
-    Object.entries(fetchedEtdMap).forEach(([segmentAbbr, currentEtds]) => {
+
+    new Set([
+      ...Object.keys(fetchedEtdMap),
+      ...Object.keys(stationEtdMap),
+    ]).forEach((segmentAbbr) => {
+      const currentEtds = fetchedEtdMap[segmentAbbr] || [];
       const previousEtds = stationEtdMap[segmentAbbr] || [];
 
       if (isEqual(currentEtds, previousEtds)) {
@@ -302,11 +307,13 @@ async function main() {
 
       const indexMapping = stationToTrainIndexing.get(segmentAbbr) || [];
 
+      debug(segmentAbbr, previousEtds, currentEtds);
+
       // Remove stale trains.
       remappedPrevious.splice(0, newlyUntrackedTrainCount);
       const removedTrainIds = indexMapping.splice(0, newlyUntrackedTrainCount);
       removedTrainIds.forEach(trainId => {
-        debug('invalidating train:', trainId, previousEtds, currentEtds);
+        debug('invalidating train:', trainId, `(${ segmentAbbr })`);
         trainMap.get(trainId).printStats();
         trainMap.delete(trainId);
       });
