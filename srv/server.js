@@ -237,7 +237,7 @@ class TrainWatcher {
             lat: nextStation.lat - (progress * (nextStation.lat - station.lat)),
             lng: nextStation.lng - (progress * (nextStation.lng - station.lng)),
           };
-          const headingRadians = Math.atan2(trainPosition.lng - station.lng, trainPosition.lat - station.lat);
+          // const headingRadians = Math.atan2(trainPosition.lng - station.lng, trainPosition.lat - station.lat);
 
           // debug(`Train ${ stationsKey } in ${ estimate.minutes }min (avg: ${ avgTravelTime.toFixed(2) }min) resolved to ${ trainPosition.lat.toFixed(2) }, ${ trainPosition.lng.toFixed(2) } @ ${ (headingRadians * 180 / Math.PI).toFixed(2) }`);
         });
