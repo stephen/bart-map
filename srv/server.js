@@ -40,8 +40,11 @@ async function fetchRoutesWithSchedules() {
 function fetchRouteSchedule(routeNumber) {
   return fetch(`https://api.bart.gov/api/sched.aspx?cmd=routesched&route=${ routeNumber }&key=MW9S-E7SL-26DU-VV8V`)
     .then(responseToJson)
+    .then(resp => resp.root)
     .then(resp => ({
-      trains: resp.root.route[0].train.map(train => ({
+      // if the route does not run on this day, this is empty
+      // TODO: refetch this per day, or always check a weekday?
+      trains: (resp.route[0].train || []).map(train => ({
         // some stops have no `origTime` - assume this means
         // that the train does not stop at the station?
         stops: train.stop.filter(({ $: stop }) => stop.origTime).map(({ $: stop }) => ({
@@ -64,8 +67,8 @@ function fetchRouteSchedule(routeNumber) {
         id: train['$'].trainId[0],
         trainIndex: parseInt(train['$'].trainIdx[0], 10),
       })),
-      date: moment(resp.root.date[0], 'MM/DD/YYYY'),
-      scheduleNumber: parseInt(resp.root.sched_num[0], 10),
+      date: moment(resp.date[0], 'MM/DD/YYYY'),
+      scheduleNumber: parseInt(resp.sched_num[0], 10),
     }));
 }
 
