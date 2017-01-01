@@ -4,6 +4,7 @@ import fetch from "isomorphic-fetch";
 import { Parser as XmlParser } from 'xml2js';
 import moment from 'moment';
 import assert from 'assert';
+import { isEqual } from 'lodash';
 
 const debug = debugCreator('bart');
 const verbose = debugCreator('bart:verbose');
@@ -103,7 +104,7 @@ function fetchRouteEtds() {
             cars: parseInt(estimate.length[0], 10),
             minutes: estimate.minutes[0].toLowerCase() !== 'leaving' ? parseInt(estimate.minutes[0], 10) : -1, // use -1 to designate `LEAVING`
             platform: parseInt(estimate.platform[0], 10),
-          })).sort((a, b) => b - a),
+          })).sort((a, b) => a.minutes - b.minutes),
         }));
         return map;
       }, {})
@@ -113,7 +114,7 @@ function fetchRouteEtds() {
 function computeAverageTimeBetweenStations(routes, schedules = null) {
   return routes.reduce((routeMap, route) => {
     const schedule = schedules ? schedules[route.number] : route.schedule;
-    const variance = schedule.trains.reduce((map, train) => {
+    const tripLengths = schedule.trains.reduce((map, train) => {
       train.stops.reduce((previous, stop) => {
         if (!previous) {
           return stop;
@@ -131,7 +132,7 @@ function computeAverageTimeBetweenStations(routes, schedules = null) {
       return map;
     }, {});
 
-    routeMap[route.number] = Object.entries(variance).reduce((map, [key, values]) => {
+    routeMap[route.number] = Object.entries(tripLengths).reduce((map, [key, values]) => {
       map[key] = values.reduce((sum, time) => sum + time, 0) / values.length;
       return map;
     }, {});
@@ -145,7 +146,7 @@ function analyze(stations, routes) {
   return fetchRouteEtds().then(stationEtds => {
     const stationTimes = computeAverageTimeBetweenStations(routes);
 
-    const stationsToTrains = {};
+    const segmentsToTrains = {};
     stations.forEach(station => {
       // debug(`Station ${ station.name } at ${ station.lat }, ${ station.lng }`)
 
@@ -153,7 +154,7 @@ function analyze(stations, routes) {
       if (!stationEtds[station.abbr]) {
         return;
       }
-    
+
       stationEtds[station.abbr].forEach(line => {
         const dest = line.destinationAbbr;
 
@@ -190,10 +191,10 @@ function analyze(stations, routes) {
         const nearbyEstimates = line.estimates.filter(estimate => estimate.minutes < avgTravelTime);
         nearbyEstimates.forEach(estimate => {
 
-          if (!stationsToTrains[stationsKey]) {
-            stationsToTrains[stationsKey] = [];
+          if (!segmentsToTrains[stationsKey]) {
+            segmentsToTrains[stationsKey] = [];
           }
-          stationsToTrains[stationsKey].push(estimate.minutes);
+          segmentsToTrains[stationsKey].push(estimate);
           const progress = estimate.minutes === -1 ? 1 : estimate.minutes / avgTravelTime;
           const trainPosition = {
             lat: nextStation.lat - (progress * (nextStation.lat - station.lat)),
@@ -206,19 +207,47 @@ function analyze(stations, routes) {
       });
     });
     debug(`[${ moment().format() }] done`);
-    return stationsToTrains;
+
+    Object.keys(segmentsToTrains).forEach(key => segmentsToTrains[key].sort((a, b) => a.minutes - b.minutes));
+    return segmentsToTrains;
   });
 }
 
-// lol
-const deepEqual = (a, b) => {
-  try {
-    assert.deepEqual(a, b);
-    return true;
-  } catch (err) {
-    return false;
+class Train {
+  constructor(id, initialEtd) {
+    assert(initialEtd, 'Train must be initialized with an estimate');
+    this.id = id;
+    this.length = initialEtd.length;
+    this.updates = [];
+
+    this.update(initialEtd);
   }
-};
+
+  update(etd) {
+    const mostRecentUpdate = this.updates[this.updates.length - 1];
+    if (mostRecentUpdate && mostRecentUpdate.minutes === etd.minutes) {
+      return;
+    }
+
+    this.updates.push({
+      timestamp: moment(),
+      minutes: etd.minutes,
+    });
+
+    // debug(`updated train ${ this.id }:`, this.updates.map(update => `[${ update.timestamp.format('MM/DD@HH:mm:ss') }] ${ update.minutes }m`).join(', '));
+  }
+
+  printStats() {
+    debug(`stats for train ${ this.id }:`);
+    for (let i = 0; i < this.updates.length; i++) {
+      const update = this.updates[i];
+      const prev = this.updates[i - 1];
+
+      const diff = prev ? ` (diff: ${ update.timestamp.diff(prev.timestamp, 'seconds') }s)` : '';
+      debug(`[${ update.timestamp.format('MM/DD@HH:mm:ss') }] ${ update.minutes }m${ diff }`);
+    }
+  }
+}
 
 async function main() {
   debug('fetching station + routes...');
@@ -228,34 +257,81 @@ async function main() {
   ]);
   debug('done');
 
-  const initMap = await analyze(stations, routes);
+  const initialEtdMap = await analyze(stations, routes);
 
-  Object.entries(initMap).forEach(([key, value]) => debug(key, value.length, value));
-  let stationEtdMap = initMap;
+  // synthetic train id -> train instanceA
+  const trainMap = new Map();
+
+  // station abbr -> array,
+  // where index is synced to stationEtdMap
+  // indexes, and value is the train id
+  const stationToTrainIndexing = new Map();
+  let trainCounter = 0;
+
+  Object.entries(initialEtdMap).forEach(([segmentAbbr, etds]) => {
+    // debug(segmentAbbr, etds.length, etds);
+
+    const indexMapping = [];
+    etds.forEach(etd => {
+      const id = trainCounter++;
+      trainMap.set(id, new Train(id, etd));
+      indexMapping.push(id);
+    });
+    stationToTrainIndexing.set(segmentAbbr, indexMapping);
+  });
+
+  let stationEtdMap = initialEtdMap;
 
   setInterval(async () => {
-    const fetchMap = await analyze(stations, routes);
+    const fetchedEtdMap = await analyze(stations, routes);
 
-    const checkedStations = new Set();
-    const diff = Object.entries(fetchMap).reduce((diff, [key, value]) => {
-      checkedStations.add(key);
-      if (!deepEqual(fetchMap[key], stationEtdMap[key])) {
-        diff.set(key, {
-          prev: stationEtdMap[key],
-          next: fetchMap[key],
+    Object.entries(fetchedEtdMap).forEach(([segmentAbbr, currentEtds]) => {
+      const previousEtds = stationEtdMap[segmentAbbr] || [];
+
+      if (isEqual(currentEtds, previousEtds)) {
+        return;
+      }
+
+      // Assumes that leaving trains are at the beginning, since
+      // estimates are sorted.
+      const currentLeaving = currentEtds.filter(etd => etd.minutes === -1).length;
+      const previousLeaving = previousEtds.filter(etd => etd.minutes === -1).length;
+
+      const newlyUntrackedTrainCount = Math.max(previousLeaving - currentLeaving, 0);
+      const remappedPrevious = Array.from(previousEtds);
+
+      const indexMapping = stationToTrainIndexing.get(segmentAbbr) || [];
+
+      // Remove stale trains.
+      remappedPrevious.splice(0, newlyUntrackedTrainCount);
+      const removedTrainIds = indexMapping.splice(0, newlyUntrackedTrainCount);
+      removedTrainIds.forEach(trainId => {
+        debug('invalidating train:', trainId, previousEtds, currentEtds);
+        trainMap.get(trainId).printStats();
+        trainMap.delete(trainId);
+      });
+
+      // Add new trains.
+      if (currentEtds.length > remappedPrevious.length) {
+        currentEtds.slice(remappedPrevious.length).forEach(etd => {
+          const id = trainCounter++;
+          trainMap.set(id, new Train(id, etd));
+          indexMapping.push(id);
         });
       }
-      return diff;
-    }, new Map());
 
-    if (diff.size > 0) {
-      debug(`changeset`);
-      diff.forEach((value, key) => debug(key, value));
-    } else {
-      debug(`nochange`);
-    }
+      // Update existing trains.
+      currentEtds.slice(0, remappedPrevious.length).forEach((etd, index) => {
+        const trainId = indexMapping[index];
+        trainMap.get(trainId).update(etd);
+      });
 
-    stationEtdMap = fetchMap;
+      stationToTrainIndexing.set(segmentAbbr, indexMapping);
+    });
+
+    stationToTrainIndexing
+
+    stationEtdMap = fetchedEtdMap;
   }, 1000 * 10);
 }
 
