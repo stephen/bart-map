@@ -222,11 +222,15 @@ class TrainWatcher {
           train.stops.findIndex(stop => stop.station === station.abbr) < train.stops.findIndex(stop => stop.station === dest)
         );
 
-        const nextStop = train.stops[train.stops.findIndex(stop => stop.station === station.abbr) + 1];
+        const previousStop = train.stops[train.stops.findIndex(stop => stop.station === station.abbr) - 1];
 
-        assert(nextStop, `Could not find next stop from ${ station.abbr } on ${ route.abbr }`)
-        const nextStation = this.stations.find(station => station.abbr === nextStop.station);
-        const stationsKey = `${ station.abbr }-${ nextStop.station }`;
+        if (!previousStop) {
+          debug(previousStop, `Could not find previous stop from ${ station.abbr } on ${ route.abbr }`);
+          return;
+        }
+        // assert(previousStop, `Could not find previous stop to ${ station.abbr } on ${ route.abbr }`);
+        const nextStation = this.stations.find(station => station.abbr === previousStop.station);
+        const stationsKey = `${ previousStop.station }-${ station.abbr }`;
         const avgTravelTime = stationTimes[route.number][stationsKey];
 
         // ignore estimates that are probably past this station.
