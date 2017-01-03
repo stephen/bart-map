@@ -21,6 +21,20 @@ type Train {
   id: Int!
   updates: [TrainUpdate]!
   cars: Int!
+  origin: Station!
+  destination: Station!
+  averageMinutes: Float!
+}
+
+type Station {
+  id: String!
+  name: String!
+  address: String!
+  city: String!
+  zipcode: String!
+  county: String!
+  lat: Float!
+  lng: Float!
 }
 
 type TrainUpdate {
@@ -30,6 +44,7 @@ type TrainUpdate {
 
 type Query {
   trains: [Train]
+  stations: [Station]
 }
 
 schema {
@@ -53,6 +68,14 @@ async function main() {
       trains() {
         return Array.from(watcher.trains.values());
       },
+      stations() {
+        return stations;
+      },
+    },
+    Station: {
+      id(station) {
+        return station.abbr;
+      }
     },
     Train: {
       updates(train) {
@@ -60,6 +83,12 @@ async function main() {
           ...update,
           timestamp: update.timestamp.unix(),
         }));
+      },
+      origin(train) {
+        return stations.find(station => station.abbr === train.originAbbr);
+      },
+      destination(train) {
+        return stations.find(station => station.abbr === train.destinationAbbr);
       },
     },
   };

@@ -7,7 +7,7 @@ import { fetchRouteEtds } from './bart-api';
 
 const debug = debugCreator('bart:watcher');
 
-function computeAverageTimeBetweenStations(routes, schedules = null) {
+export function computeAverageTimeBetweenStations(routes, schedules = null) {
   return routes.reduce((routeMap, route) => {
     const schedule = schedules ? schedules[route.number] : route.schedule;
     const tripLengths = schedule.trains.reduce((map, train) => {
@@ -38,13 +38,23 @@ function computeAverageTimeBetweenStations(routes, schedules = null) {
 }
 
 class Train {
-  constructor(id, initialEtd) {
+  constructor(id, segment, initialEtd) {
     assert(initialEtd, 'Train must be initialized with an estimate');
     this.id = id;
     this.cars = initialEtd.cars;
+    this.segment = segment;
     this.updates = [];
+    this.averageMinutes = initialEtd.expected;
 
     this.update(initialEtd);
+  }
+
+  get originAbbr() {
+    return this.segment.split('-')[0];
+  }
+
+  get destinationAbbr() {
+    return this.segment.split('-')[1];
   }
 
   update(etd) {
@@ -107,7 +117,7 @@ class TrainWatcher {
     Object.entries(initialEtdMap).forEach(([segmentAbbr, etds]) => {
       const indexMapping = [];
       etds.forEach(etd => {
-        const id = this.addTrain(etd);
+        const id = this.addTrain(segmentAbbr, etd);
         indexMapping.push(id);
       });
       this.stationToTrainIndex.set(segmentAbbr, indexMapping);
@@ -157,7 +167,7 @@ class TrainWatcher {
       // Add new trains.
       if (currentEtds.length > remappedPrevious.length) {
         currentEtds.slice(remappedPrevious.length).forEach(etd => {
-          const id = this.addTrain(etd);
+          const id = this.addTrain(segmentAbbr, etd);
           indexMapping.push(id);
         });
       }
@@ -226,15 +236,7 @@ class TrainWatcher {
           if (!segmentsToTrains[stationsKey]) {
             segmentsToTrains[stationsKey] = [];
           }
-          segmentsToTrains[stationsKey].push(estimate);
-          const progress = estimate.minutes === -1 ? 1 : estimate.minutes / avgTravelTime;
-          const trainPosition = {
-            lat: nextStation.lat - (progress * (nextStation.lat - station.lat)),
-            lng: nextStation.lng - (progress * (nextStation.lng - station.lng)),
-          };
-          // const headingRadians = Math.atan2(trainPosition.lng - station.lng, trainPosition.lat - station.lat);
-
-          // debug(`Train ${ stationsKey } in ${ estimate.minutes }min (avg: ${ avgTravelTime.toFixed(2) }min) resolved to ${ trainPosition.lat.toFixed(2) }, ${ trainPosition.lng.toFixed(2) } @ ${ (headingRadians * 180 / Math.PI).toFixed(2) }`);
+          segmentsToTrains[stationsKey].push({ ...estimate, expected: avgTravelTime });
         });
       });
     });
@@ -244,9 +246,9 @@ class TrainWatcher {
     return segmentsToTrains;
   }
 
-  addTrain(etd) {
+  addTrain(segment, etd) {
     const id = this.trainCounter++;
-    this.trains.set(id, new Train(id, etd));
+    this.trains.set(id, new Train(id, segment, etd));
     return id;
   }
 }
