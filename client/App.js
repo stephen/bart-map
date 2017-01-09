@@ -5,8 +5,9 @@ import GoogleMap from './google-map';
 import ApolloClient, { createNetworkInterface } from 'apollo-client';
 import { ApolloProvider } from 'react-apollo';
 
+const host = process.env.NODE_ENV === 'production' ? window.location.origin : 'http://localhost:3001';
 const client = new ApolloClient({
-  networkInterface: createNetworkInterface({ uri: 'http://localhost:3001/graphql' }),
+  networkInterface: createNetworkInterface({ uri: `${ host }/graphql` }),
 });
 
 class App extends Component {
