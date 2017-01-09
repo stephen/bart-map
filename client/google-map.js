@@ -9,7 +9,6 @@ class GoogleMap extends Component {
 
   constructor(props) {
     super(props);
-    this.renderStationsAndTrains = this.renderStationsAndTrains.bind(this);
     this.markers = [];
   }
 
@@ -29,12 +28,12 @@ class GoogleMap extends Component {
   }
 
   componentWillReceiveProps(nextProps) {
-    if (this.google && nextProps.stations && nextProps.trains) {
-      this.renderStationsAndTrains(nextProps.stations, nextProps.trains);
+    if (this.google && !nextProps.loading) {
+      this.renderStationsAndTrains(nextProps.stations, nextProps.trains, nextProps.routes);
     }
   }
 
-  renderStationsAndTrains(stations, trains) {
+  renderStationsAndTrains = (stations, trains, routes) => {
 
     this.markers.forEach(marker => marker.setMap(null));
 
@@ -72,6 +71,17 @@ class GoogleMap extends Component {
       });
       this.markers.push(marker);
     });
+
+    routes.forEach(route => {
+      new google.maps.Polyline({
+        map: this.map,
+        path: route.points,
+        geodesic: true,
+        strokeColor: route.color,
+        strokeOpacity: 1.0,
+        strokeWeight: 2,
+      });
+    });
   }
 
   render() {
@@ -98,16 +108,25 @@ const stationsAndTrainsQuery = gql`
       lng
       name
     }
+    routes {
+      name
+      color
+      points {
+        lng
+        lat
+      }
+    }
   }
 `;
 
 export default compose(
   graphql(stationsAndTrainsQuery, {
     options: { pollInterval: 10000 },
-    props: ({ ownProps, data: { loading, stations, trains } }) => ({
+    props: ({ ownProps, data: { loading, stations, trains, routes } }) => ({
       loading,
       stations,
       trains,
+      routes,
     }),
   }),
 )(GoogleMap);
