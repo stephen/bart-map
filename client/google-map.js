@@ -9,7 +9,7 @@ class GoogleMap extends Component {
 
   constructor(props) {
     super(props);
-    this.markers = [];
+    this.mapObjects = [];
   }
 
   componentWillMount() {
@@ -22,7 +22,7 @@ class GoogleMap extends Component {
       });
 
       if (!this.props.loading) {
-        this.renderStationsAndTrains(this.props.stations, this.props.trains);
+        this.renderStationsAndTrains(this.props.stations, this.props.trains, this.props.routes);
       }
     });
   }
@@ -34,12 +34,11 @@ class GoogleMap extends Component {
   }
 
   renderStationsAndTrains = (stations, trains, routes) => {
-
-    this.markers.forEach(marker => marker.setMap(null));
+    this.mapObjects.forEach(marker => marker.setMap(null));
 
     const google = this.google;
     stations.forEach(station => {
-      this.markers.push(new google.maps.Marker({
+      this.mapObjects.push(new google.maps.Marker({
         map: this.map,
         position: { lat: station.lat, lng: station.lng },
         title: station.name,
@@ -69,18 +68,18 @@ class GoogleMap extends Component {
           rotation: Math.atan2(trainPosition.lng - train.origin.lng, trainPosition.lat - train.origin.lat) * 180 / Math.PI,
         },
       });
-      this.markers.push(marker);
+      this.mapObjects.push(marker);
     });
 
     routes.forEach(route => {
-      new google.maps.Polyline({
+      this.mapObjects.push(new google.maps.Polyline({
         map: this.map,
         path: route.points,
         geodesic: true,
         strokeColor: route.color,
         strokeOpacity: 1.0,
         strokeWeight: 2,
-      });
+      }));
     });
   }
 
