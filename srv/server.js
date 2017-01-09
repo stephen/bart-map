@@ -166,6 +166,8 @@ async function main() {
   const app = express();
 
   app.use('/graphql', cors(), bodyParser.json(), graphqlExpress({ schema: executableSchema }));
+  app.use(express.static(path.join(__dirname, '../build/static')));
+  app.use((req, res) => res.sendFile(path.join(__dirname, '../build/index.html')))
 
   app.listen(PORT);
 }
